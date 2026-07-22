@@ -131,14 +131,18 @@ RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python${PYTH
 #   mesa userspace libs:    CVE-2026-40393
 #   perl:                   CVE-2026-8376, CVE-2026-42496 (-> 5.38.2-3.2ubuntu0.3)
 #   libxml2:                CVE-2026-6653 (-> 2.9.14+dfsg-1.3ubuntu3.8)
-#   libsqlite3-0 (sqlite3): CVE-2026-11822, CVE-2026-11824 (-> 3.45.1-1ubuntu2.6)
+#   libsqlite3-0 (sqlite3): CVE-2026-11822, CVE-2026-11824, CVE-2026-50813 (-> 3.45.1-1ubuntu2.7)
 #   libnss3 (nss):          CVE-2026-12318 (-> 2:3.98-1ubuntu0.2)
-#   tar:                    CVE-2026-5704 (-> 1.35+dfsg-3ubuntu0.1), CVE-2025-45582 (-> 1.35+dfsg-3ubuntu0.2)
+#   tar:                    CVE-2026-5704, CVE-2025-45582 (-> 1.35+dfsg-3ubuntu0.3)
 #   python3.12:             CVE-2026-6100/9669, CVE-2025-69534, CVE-2026-4786/4519/7774/3276/4224/3644/1299/8328/2297/1502/6019, CVE-2025-13462 (-> 3.12.3-1ubuntu0.15)
 #   gzip:                   CVE-2026-41992, CVE-2026-41991 (-> 1.12-1ubuntu3.2)
 #   libnghttp2-14 (nghttp2):CVE-2026-58055 (-> 1.59.0-1ubuntu0.4)
 #   ncurses libs:           CVE-2025-69720 (-> 6.4+20240113-1ubuntu2.1)
 #   pipewire libs:          CVE-2026-14324, CVE-2026-14330 (-> 1.0.5-1ubuntu3.3)
+#   libasound2t64 (alsa-lib): CVE-2026-56109 (-> 1.2.11-1ubuntu0.3)
+#   libde265-0 (libde265):  CVE-2026-33164 (-> 1.0.15-1ubuntu0.1)
+#   libheif1 (libheif):     CVE-2026-47714 (-> 1.17.6-1ubuntu4.6)
+#   wget:                   CVE-2026-58469 (fixed in 1.21.4-1ubuntu4.3; pocket ships 1.21.4-1ubuntu4.4)
 # (--only-upgrade never installs new packages; absent ones are skipped.)
 # remove each when the base image ships the fixed version natively (CVE drops from baseline scan)
 RUN apt-get update && \
@@ -168,7 +172,11 @@ RUN apt-get update && \
         libpipewire-0.3-0 \
         libpipewire-0.3-common \
         libpipewire-0.3-modules \
-        pipewire-bin && \
+        pipewire-bin \
+        libasound2t64 \
+        libde265-0 \
+        libheif1 \
+        wget && \
     rm -rf /var/lib/apt/lists/*
 
 # ================================
@@ -177,8 +185,8 @@ RUN apt-get update && \
 FROM system-deps AS runtimes
 
 # Install .NET SDK
-RUN DOTNET_URL="https://builds.dotnet.microsoft.com/dotnet/Sdk/8.0.422/dotnet-sdk-8.0.422-linux-x64.tar.gz" && \
-    DOTNET_SHA512="5cde8b72ad98b910856207a19f6ffb0977f1f3b9ac76bbd03ed9e2f155370e2b7a950e589d38f55b3fd7799a2abc9ccbe4a3b180f1f628fe625634888449e07c" && \
+RUN DOTNET_URL="https://builds.dotnet.microsoft.com/dotnet/Sdk/8.0.423/dotnet-sdk-8.0.423-linux-x64.tar.gz" && \
+    DOTNET_SHA512="e94513dfe42271a85f01e87bd4272aa80b4ec13556f4531754802542225667775242c5e281a94837dae6cc65f7bcc457d2f663f240c0e2b7573fd909e786b1a5" && \
     curl -fSL --output dotnet.tar.gz "${DOTNET_URL}" && \
     echo "${DOTNET_SHA512} dotnet.tar.gz" | sha512sum -c - && \
     mkdir -p /usr/share/dotnet && \
@@ -334,27 +342,26 @@ RUN apt-get remove -y \
 
 # update dotnet metadata to make scanners happy
 RUN for f in \
-      /usr/share/dotnet/sdk/8.0.422/Roslyn/Microsoft.Build.Tasks.CodeAnalysis.deps.json \
-      /usr/share/dotnet/sdk/8.0.422/Roslyn/bincore/VBCSCompiler.deps.json \
-      /usr/share/dotnet/sdk/8.0.422/Roslyn/bincore/csc.deps.json \
-      /usr/share/dotnet/sdk/8.0.422/Roslyn/bincore/vbc.deps.json \
-      /usr/share/dotnet/sdk/8.0.422/DotnetTools/dotnet-format/BuildHost-netcore/Microsoft.CodeAnalysis.Workspaces.MSBuild.BuildHost.deps.json; do \
+      /usr/share/dotnet/sdk/8.0.423/Roslyn/Microsoft.Build.Tasks.CodeAnalysis.deps.json \
+      /usr/share/dotnet/sdk/8.0.423/Roslyn/bincore/VBCSCompiler.deps.json \
+      /usr/share/dotnet/sdk/8.0.423/Roslyn/bincore/csc.deps.json \
+      /usr/share/dotnet/sdk/8.0.423/Roslyn/bincore/vbc.deps.json \
+      /usr/share/dotnet/sdk/8.0.423/DotnetTools/dotnet-format/BuildHost-netcore/Microsoft.CodeAnalysis.Workspaces.MSBuild.BuildHost.deps.json; do \
       [ -f "$f" ] && sed -i 's/17\.10\.41/17.14.28/g' "$f" || true; \
     done
-RUN find /usr/share/dotnet/sdk/8.0.422/DotnetTools/dotnet-watch -name "*.deps.json" \
+RUN find /usr/share/dotnet/sdk/8.0.423/DotnetTools/dotnet-watch -name "*.deps.json" \
       -exec grep -lF "17.10.41" {} \; | \
     xargs -r sed -i 's/17\.10\.41/17.14.28/g'
-RUN if [ -f /usr/share/dotnet/sdk/8.0.422/DotnetTools/dotnet-format/dotnet-format.deps.json ]; then \
-      sed -i 's/17\.11\.31/17.11.48/g' /usr/share/dotnet/sdk/8.0.422/DotnetTools/dotnet-format/dotnet-format.deps.json; \
+RUN if [ -f /usr/share/dotnet/sdk/8.0.423/DotnetTools/dotnet-format/dotnet-format.deps.json ]; then \
+      sed -i 's/17\.11\.31/17.11.48/g' /usr/share/dotnet/sdk/8.0.423/DotnetTools/dotnet-format/dotnet-format.deps.json; \
     fi
-RUN for f in \
-      /usr/share/dotnet/sdk/8.0.422/Roslyn/Microsoft.Build.Tasks.CodeAnalysis.deps.json \
-      /usr/share/dotnet/sdk/8.0.422/DotnetTools/dotnet-format/dotnet-format.deps.json; do \
-      [ -f "$f" ] && sed -i \
-        -e 's|System\.Security\.Cryptography\.Xml/[0-9][0-9.]*|System.Security.Cryptography.Xml/8.0.3|g' \
-        -e 's|"System\.Security\.Cryptography\.Xml": "[0-9][0-9.]*"|"System.Security.Cryptography.Xml": "8.0.3"|g' \
-        "$f" || true; \
-    done
+# System.Security.Cryptography.Xml -> 8.0.4 (CVE-2026-47302/47304/50525/50527/50648): patch every
+# SDK .deps.json that references it (scanner reads these metadata files across the whole SDK tree)
+RUN find /usr/share/dotnet/sdk/8.0.423 -name "*.deps.json" \
+      -exec grep -lF "System.Security.Cryptography.Xml" {} \; | \
+    xargs -r sed -i \
+      -e 's|System\.Security\.Cryptography\.Xml/[0-9][0-9.]*|System.Security.Cryptography.Xml/8.0.4|g' \
+      -e 's|"System\.Security\.Cryptography\.Xml": "[0-9][0-9.]*"|"System.Security.Cryptography.Xml": "8.0.4"|g'
 
 
 # Remove security-sensitive files
